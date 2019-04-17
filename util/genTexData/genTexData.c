@@ -52,6 +52,8 @@
 #include <AR2/featureSet.h>
 #include <AR2/util.h>
 #include <KPM/kpm.h>
+#include <AR2/tracking.h>
+
 #ifdef _WIN32
 #  define MAXPATHLEN MAX_PATH
 #else
@@ -122,6 +124,7 @@ static void  usage( char *com );
 static int   readImageFromFile(const char *filename, ARUint8 **image_p, int *xsize_p, int *ysize_p, int *nc_p, float *dpi_p);
 static int   setDPI( void );
 static void  write_exitcode(void);
+static void saveSurfaceSetData(AR2SurfaceSetT * sset, const char * cPth);
 
 int main( int argc, char *argv[] )
 {
@@ -495,10 +498,75 @@ int main( int argc, char *argv[] )
                 ARLOGi("Generator finished at %s\n--\n", stime);
         }
     }
-
+    
+    // save .dat file for openframeworks and ofAxArtool5
+    AR2SurfaceSetT * surface = ar2ReadSurfaceSet(filename, "fset", NULL);
+    
+    char namebuf[512];
+    sprintf(namebuf, "%s.%s", filename, "dat");
+    saveSurfaceSetData(surface, namebuf );
+    
     exitcode = E_NO_ERROR;
     return (exitcode);
 }
+
+static void saveSurfaceSetData(AR2SurfaceSetT * sset, const char * cPth){
+    
+    FILE * fp;
+    fp = fopen(cPth, "wb");
+    
+    fwrite(&sset->num, sizeof(int), 1, fp);
+    fwrite(&sset->trans1, sizeof(float)*3*4, 1, fp);
+    fwrite(&sset->trans2, sizeof(float)*3*4, 1, fp);
+    fwrite(&sset->trans3, sizeof(float)*3*4, 1, fp);
+    fwrite(&sset->contNum, sizeof(int), 1, fp);
+    
+    printf("Saving %i surfaces\n",sset->num);
+    //surfaces
+    for(int i=0;i<sset->num;i++){
+        fwrite(&sset->surface[i].trans, sizeof(float)*3*4, 1, fp);
+        fwrite(&sset->surface[i].itrans, sizeof(float)*3*4, 1, fp);
+        
+        //image set
+        printf("Surface %i has %i images\n",i,sset->surface[i].imageSet->num);
+        fwrite(&sset->surface[i].imageSet->num, sizeof(int), 1, fp);
+        for(int j=0;j<sset->surface[i].imageSet->num;j++){
+            fwrite(&sset->surface[i].imageSet->scale[j]->xsize, sizeof(int), 1, fp);
+            fwrite(&sset->surface[i].imageSet->scale[j]->ysize, sizeof(int), 1, fp);
+            fwrite(&sset->surface[i].imageSet->scale[j]->dpi, sizeof(float), 1, fp);
+            
+            //fwrite(&sset->surface[i].imageSet->scale[j]->imgBW, sizeof(ARUint8)*sset->surface[i].imageSet->scale[j]->xsize*sset->surface[i].imageSet->scale[j]->ysize, 1, fp);
+            int nPix = sset->surface[i].imageSet->scale[j]->xsize*sset->surface[i].imageSet->scale[j]->ysize;
+            for(int k=0;k<nPix;k++){
+                fwrite(&sset->surface[i].imageSet->scale[j]->imgBW[k], sizeof(ARUint8), 1, fp);
+            }
+            
+            printf("Image %i is %ix%i\n",j,sset->surface[i].imageSet->scale[j]->xsize,sset->surface[i].imageSet->scale[j]->ysize);
+        }
+        
+        //featureset
+        printf("Surface %i has %i feature sets\n",i,sset->surface[i].featureSet->num);
+        fwrite(&sset->surface[i].featureSet->num, sizeof(int), 1, fp);
+        for(int j=0;j<sset->surface[i].featureSet->num;j++){
+            printf("Feature set %i has %i coords\n",j,sset->surface[i].featureSet->list[j].num);
+            fwrite(&sset->surface[i].featureSet->list[j].num, sizeof(int), 1, fp);
+            fwrite(&sset->surface[i].featureSet->list[j].scale, sizeof(int), 1, fp);
+            fwrite(&sset->surface[i].featureSet->list[j].maxdpi, sizeof(float), 1, fp);
+            fwrite(&sset->surface[i].featureSet->list[j].mindpi, sizeof(float), 1, fp);
+            
+            for(int k=0;k<sset->surface[i].featureSet->list[j].num;k++){
+                fwrite(&sset->surface[i].featureSet->list[j].coord[k].x, sizeof(int), 1, fp);
+                fwrite(&sset->surface[i].featureSet->list[j].coord[k].y, sizeof(int), 1, fp);
+                fwrite(&sset->surface[i].featureSet->list[j].coord[k].mx, sizeof(float), 1, fp);
+                fwrite(&sset->surface[i].featureSet->list[j].coord[k].my, sizeof(float), 1, fp);
+                fwrite(&sset->surface[i].featureSet->list[j].coord[k].maxSim, sizeof(float), 1, fp);
+            }
+        }
+        
+    }
+    fclose(fp);
+}
+
 
 // Reads dpiMinAllowable, xsize, ysize, dpi, background, dpiMin, dpiMax.
 // Sets dpiMin, dpiMax, dpi_num, dpi_list.
