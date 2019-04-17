@@ -1,3 +1,7 @@
+## Fork for ArToolKit5 – to be used with openframeworks and https://github.com/martial/artoolkit5 
+
+Compile genTexData to export .dat file
+
 # Read me for ARToolKit
 
 ## Contents
